@@ -1990,6 +1990,12 @@ namespace AvalonDock
 
 		internal void ExecuteContentActivateCommand(LayoutContent content) => content.IsActive = true;
 
+		internal void RaiseDocumentClosing(DocumentClosingEventArgs e) => DocumentClosing?.Invoke(this, e);
+		
+		internal void RaiseAnchorableHiding(AnchorableHidingEventArgs e) => AnchorableHiding?.Invoke(this, e);
+
+		internal void RaiseAnchorableClosing(AnchorableClosingEventArgs e) => AnchorableClosing?.Invoke(this, e);
+
 		#endregion Internal Methods
 
 		#region Overrides
