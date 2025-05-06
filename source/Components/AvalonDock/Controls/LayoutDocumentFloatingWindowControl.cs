@@ -150,17 +150,6 @@ namespace AvalonDock.Controls
 						}
 					}
 					break;
-
-				case Win32Helper.WM_CLOSE:
-					if (CloseInitiatedByUser)
-					{
-						// We want to force the window to go through our standard logic for closing.
-						// So, if the window close is initiated outside of our code (such as from the taskbar),
-						// we cancel that close and trigger our close logic instead.
-						this.CloseWindowCommand.Execute(null);
-						handled = true;
-					}
-					break;
 			}
 			return base.FilterMessage(hwnd, msg, wParam, lParam, ref handled);
 		}
