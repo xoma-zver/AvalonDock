@@ -208,20 +208,14 @@ namespace AvalonDock.Controls
 		/// <inheritdoc />
 		protected override void OnClosed(EventArgs e)
 		{
-			var root = Model.Root;
-			if (root != null)
-			{
-				if (root is LayoutRoot layoutRoot) layoutRoot.Updated -= OnRootUpdated;
-				root.Manager.RemoveFloatingWindow(this);
-				root.CollectGarbage();
-			}
+			if (Model.Root is LayoutRoot layoutRoot) layoutRoot.Updated -= OnRootUpdated;
+			
 			if (_overlayWindow != null)
 			{
 				_overlayWindow.Close();
 				_overlayWindow = null;
 			}
 			base.OnClosed(e);
-			if (!CloseInitiatedByUser) root?.FloatingWindows.Remove(_model);
 
 			// We have to clear binding instead of creating a new empty binding.
 			BindingOperations.ClearBinding(_model, VisibilityProperty);

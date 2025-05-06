@@ -157,20 +157,12 @@ namespace AvalonDock.Controls
 		/// <inheritdoc />
 		protected override void OnClosed(EventArgs e)
 		{
-			var root = Model.Root;
-			// MK sometimes root is null, prevent crash, or should it always be set??
-			if (root != null)
-			{
-				root.Manager.RemoveFloatingWindow(this);
-				root.CollectGarbage();
-			}
 			if (_overlayWindow != null)
 			{
 				_overlayWindow.Close();
 				_overlayWindow = null;
 			}
 			base.OnClosed(e);
-			if (!CloseInitiatedByUser) root?.FloatingWindows.Remove(_model);
 			_model.PropertyChanged -= Model_PropertyChanged;
 		}
 
