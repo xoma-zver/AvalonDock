@@ -189,13 +189,66 @@ namespace AvalonDock.Controls
 		/// <inheritdoc />
 		protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
 		{
-			// TODO
-			if (CloseInitiatedByUser && !KeepContentVisibleOnClose)
+			// Allow base Window class and attached Closing event handlers to potentially cancel first.
+			base.OnClosing(e);
+
+			if (e.Cancel) // If already cancelled by base or others, do nothing.
+				return;
+
+			// If closed programmatically by AvalonDock (e.g., dragging last doc out), skip user checks.
+			if (!CloseInitiatedByUser)
+				return;
+
+			// Handle user-initiated close (Taskbar, Alt+F4, Window's 'X' button).
+			var manager = Model?.Root?.Manager;
+			if (manager == null)
+				return;
+
+			var documentsToClose = this.Model.Descendents().OfType<LayoutDocument>().ToArray();
+			
+			// Phase 1: Validate if ALL documents can be closed
+			// This checks properties and fires Closing events without actually closing yet.
+			// - Check explicit property first.
+			// - Check internal LayoutContent.Closing event subscribers.
+			// - Check external DockingManager.DocumentClosing event subscribers.
+			var cancelAll = documentsToClose.Any(doc => !doc.CanClose || !doc.TestCanClose() || !ManagerTestCanClose(doc));
+			
+			// If any document prevents closing, cancel the window closing.
+			if (cancelAll)
 			{
 				e.Cancel = true;
-				//_model.Descendents().OfType<LayoutDocument>().ToArray().ForEach<LayoutDocument>((a) => a.Hide());
+				return;
 			}
-			base.OnClosing(e);
+
+			// Phase 2: Execute close actions for ALL documents
+			// Execute actions now because the window WILL close after this method returns.
+			// Use commands to ensure standard AvalonDock logic is triggered.
+			foreach (var doc in documentsToClose.ToList()) // Use ToList() as closing might modify the underlying collection.
+			{
+				var docLayoutItem = manager.GetLayoutItemFromModel(doc) as LayoutDocumentItem;
+				if (docLayoutItem?.CloseCommand != null && docLayoutItem.CloseCommand.CanExecute(null))
+				{
+					// CloseCommand will internally perform CanClose/event checks again,
+					// but they should pass now.
+					docLayoutItem.CloseCommand.Execute(null);
+				}
+				else
+				{
+					// Fallback if command is somehow not available.
+					doc.CloseInternal();
+				}
+			}
+			// Window will close naturally as e.Cancel was not set to true.
+		}
+
+		/// <summary>
+		/// Helper method to check DockingManager's DocumentClosing event for cancellation.
+		/// </summary>
+		private bool ManagerTestCanClose(LayoutDocument doc)
+		{
+			var docClosingArgs = new DocumentClosingEventArgs(doc);
+			Model?.Root?.Manager.RaiseDocumentClosing(docClosingArgs);
+			return !docClosingArgs.Cancel;
 		}
 
 		bool IOverlayWindowHost.HitTestScreen(Point dragPoint)
