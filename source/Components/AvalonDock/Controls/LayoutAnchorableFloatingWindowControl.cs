@@ -229,11 +229,104 @@ namespace AvalonDock.Controls
 		}
 
 		/// <inheritdoc />
-		protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+		protected override void OnClosing(CancelEventArgs e)
 		{
-			var canHide = HideWindowCommand.CanExecute(null);
-			if (CloseInitiatedByUser && !KeepContentVisibleOnClose && !canHide) e.Cancel = true;
-			base.OnClosing(e);
+			// Allow base Window class and attached Closing event handlers to potentially cancel first.
+		    base.OnClosing(e);
+
+		    if (e.Cancel) // If already cancelled by base or others, do nothing.
+		        return;
+
+		    // If closed programmatically by AvalonDock (e.g., dragging last anchorable out), skip user checks.
+		    if (!CloseInitiatedByUser)
+			    return;
+
+		    // Handle user-initiated close (Taskbar, Alt+F4, Window's 'X' button).
+		    var manager = Model?.Root?.Manager;
+		    if (manager == null)
+		        return;
+
+		    var anchorablesToProcess = Model.Descendents().OfType<LayoutAnchorable>().ToArray();
+		    
+			// Phase 1: Validate if ALL anchorables can be processed (closed or hidden) ---
+		    // This checks properties, internal events, manager events, and command CanExecute
+		    // before deciding if the window closing can proceed.
+		    // Priority: Try Close Path
+		    // - Check internal Closing 
+		    // - Check manager AnchorableClosing event
+		    // - Check command CanExecute
+		    // Fallback: Try Hide Path
+		    // - Check internal Hiding
+		    // - Check manager AnchorableHiding event
+		    // - Check command CanExecute
+		    // Fallback 2: Cannot Close AND Cannot Hide
+		    var cancelAll = anchorablesToProcess.Any(anch =>
+		    {
+			    var closeCommand = manager.GetLayoutItemFromModel(anch)?.CloseCommand;
+			    var hideCommand = (manager.GetLayoutItemFromModel(anch) as LayoutAnchorableItem)?.HideCommand;
+			    return anch.CanClose && (!anch.TestCanClose() || !ManagerTestCanClose(anch) || closeCommand?.CanExecute(null) is false) ||
+			           anch.CanHide && (!anch.TestCanHide() || !ManagerTestCanHide(anch) || hideCommand?.CanExecute(null) is false) ||
+			           !anch.CanClose && !anch.CanHide;
+		    });
+
+		    if (cancelAll)
+		    {
+			    e.Cancel = true;
+			    return;
+		    }
+
+		    // Phase 2: Execute Commands for ALL anchorables
+		    // Commands are executed now, assuming they will succeed based on the comprehensive Phase 1 validation.
+		    // Executing here ensures content is processed before the window instance is fully disposed (OnClosed might be too late).
+		    foreach (var anch in anchorablesToProcess.ToList()) // Use ToList() as closing/hiding might modify the underlying collection.
+		    {
+			    var layoutItem = manager.GetLayoutItemFromModel(anch) as LayoutAnchorableItem;
+			    if (anch.CanClose)
+			    {
+				    layoutItem?.CloseCommand?.Execute(null);
+			    }
+			    else if (anch.CanHide)
+			    {
+				    layoutItem?.HideCommand?.Execute(null);
+			    }
+			    // If neither CanClose nor CanHide, do nothing (already validated in Phase 1).
+		    }
+		    // Window will close naturally as e.Cancel was not set to true.
+		}
+
+		/// <summary>
+		/// Helper method to check DockingManager's AnchorableClosing event for cancellation.
+		/// </summary>
+		private bool ManagerTestCanClose(LayoutAnchorable anch)
+		{
+			var ancClosingArgs = new AnchorableClosingEventArgs(anch);
+			Model?.Root?.Manager.RaiseAnchorableClosing(ancClosingArgs);
+			return !ancClosingArgs.Cancel;
+		}
+
+		/// <summary>
+		/// Helper method to check DockingManager's AnchorableHiding event for cancellation,
+		/// including the CloseInsteadOfHide request when CanClose is false.
+		/// </summary>
+		private bool ManagerTestCanHide(LayoutAnchorable anch)
+		{
+			var hidingArgs = new AnchorableHidingEventArgs(anch);
+			Model?.Root?.Manager.RaiseAnchorableHiding(hidingArgs);
+			
+			// If the Hiding event itself was cancelled, prevent the action.
+			if (hidingArgs.Cancel)
+				return false; 
+			
+			// If Hiding requests Close instead, but CanClose is false (which it must be
+			// to reach this point), then the requested action cannot be performed, so cancel.
+			if (hidingArgs.CloseInsteadOfHide)
+			{
+				// Log warning maybe? "CloseInsteadOfHide requested for an anchorable where CanClose=false."
+				return false;
+			}
+			
+			// Hiding was not cancelled and not replaced by an impossible Close action.
+			return true;
 		}
 
 		/// <inheritdoc />
