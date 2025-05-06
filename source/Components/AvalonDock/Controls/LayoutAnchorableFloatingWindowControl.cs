@@ -248,7 +248,7 @@ namespace AvalonDock.Controls
 
 		    var anchorablesToProcess = Model.Descendents().OfType<LayoutAnchorable>().ToArray();
 		    
-			// Phase 1: Validate if ALL anchorables can be processed (closed or hidden) ---
+			// Phase 1: Validate if ALL anchorables can be processed (closed or hidden)
 		    // This checks properties, internal events, manager events, and command CanExecute
 		    // before deciding if the window closing can proceed.
 		    // Priority: Try Close Path
@@ -277,6 +277,7 @@ namespace AvalonDock.Controls
 
 			// Phase 2: Execute actions based on the validated priority (Close > Hide) 
             // We use the compromise: execute user command if provided, otherwise execute default logic directly.
+            var wasAnyContentHidden = false;
             foreach (var anch in anchorablesToProcess.ToList()) // Use ToList() as actions might modify the underlying collection.
             {
                 var layoutItem = manager.GetLayoutItemFromModel(anch) as LayoutAnchorableItem;
@@ -307,7 +308,7 @@ namespace AvalonDock.Controls
                     if (!useDefaultLogic)
                     {
                         // User Custom Command Path
-                        layoutItem?.HideCommand?.Execute(null);
+                        layoutItem.HideCommand?.Execute(null);
                     }
                     else
                     {
@@ -319,10 +320,17 @@ namespace AvalonDock.Controls
                             manager.RaiseAnchorableHidden(anch); // Raise final event
                         }
                     }
+                    
+                    wasAnyContentHidden = true;
                 }
 			    // If neither CanClose nor CanHide, do nothing (already validated in Phase 1).
 		    }
-		    // Window will close naturally as e.Cancel was not set to true.
+            
+			if (wasAnyContentHidden)
+			{
+				// Close the window only if all anchorables were closed
+				e.Cancel = true;
+			}
 		}
 
 		/// <summary>
