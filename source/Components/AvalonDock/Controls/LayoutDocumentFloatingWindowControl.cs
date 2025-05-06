@@ -225,16 +225,35 @@ namespace AvalonDock.Controls
 				return;
 			}
 
-			// Phase 2: Execute close actions for ALL documents
-			// Execute actions now because the window WILL close after this method returns.
-			// Use commands to ensure standard AvalonDock logic is triggered.
-			foreach (var docLayoutItem in documentsToClose
-				         .ToList()
-				         .Select(doc => manager.GetLayoutItemFromModel(doc) as LayoutDocumentItem))
+			// Phase 2: Execute actions
+			foreach (var doc in documentsToClose.ToList())
 			{
-				// CloseCommand will internally perform CanClose/event checks again,
-				// but they should pass now.
-				docLayoutItem?.CloseCommand?.Execute(null);
+				var layoutItem = manager.GetLayoutItemFromModel(doc) as LayoutDocumentItem;
+
+				if (layoutItem != null && !layoutItem.IsDefaultCloseCommand)
+				{
+					// User Custom Command Path
+					// Execute the user's command. Assume user handles risks.
+					layoutItem.CloseCommand?.Execute(null); // CanExecute already checked in Phase 1
+				}
+				else
+				{
+					// Default AvalonDock Logic Path
+					// 1. Perform internal close logic (removes from parent, etc.)
+					doc.CloseInternal(); // Does NOT raise manager's DocumentClosed event
+
+					// 2. Clean up view/logical tree elements
+					if (layoutItem?.IsViewExists() == true)
+						manager.InternalRemoveLogicalChild(layoutItem.View);
+					
+					if (doc.Content is UIElement uiElement)
+						manager.InternalRemoveLogicalChild(uiElement);
+					
+					doc.Content = null; // Final content cleanup
+
+					// 3. Raise the manager's final event
+					manager.RaiseDocumentClosed(doc);
+				}
 			}
 			// Window will close naturally as e.Cancel was not set to true.
 		}

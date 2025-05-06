@@ -275,20 +275,51 @@ namespace AvalonDock.Controls
 			    return;
 		    }
 
-		    // Phase 2: Execute Commands for ALL anchorables
-		    // Commands are executed now, assuming they will succeed based on the comprehensive Phase 1 validation.
-		    // Executing here ensures content is processed before the window instance is fully disposed (OnClosed might be too late).
-		    foreach (var anch in anchorablesToProcess.ToList()) // Use ToList() as closing/hiding might modify the underlying collection.
-		    {
-			    var layoutItem = manager.GetLayoutItemFromModel(anch) as LayoutAnchorableItem;
-			    if (anch.CanClose)
-			    {
-				    layoutItem?.CloseCommand?.Execute(null);
-			    }
-			    else if (anch.CanHide)
-			    {
-				    layoutItem?.HideCommand?.Execute(null);
-			    }
+			// Phase 2: Execute actions based on the validated priority (Close > Hide) 
+            // We use the compromise: execute user command if provided, otherwise execute default logic directly.
+            foreach (var anch in anchorablesToProcess.ToList()) // Use ToList() as actions might modify the underlying collection.
+            {
+                var layoutItem = manager.GetLayoutItemFromModel(anch) as LayoutAnchorableItem;
+                bool useDefaultLogic = layoutItem == null; // Should not happen, but safe default
+
+                if (anch.CanClose) // Priority Action: Close
+                {
+                    if (!useDefaultLogic) useDefaultLogic = layoutItem.IsDefaultCloseCommand;
+
+                    if (!useDefaultLogic)
+                    {
+                        // User Custom Command Path
+                        layoutItem.CloseCommand?.Execute(null);
+                    }
+                    else
+                    {
+                        // Default AvalonDock Logic Path
+                        anch.CloseInternal(); // Does NOT raise manager's Closing/Closed events again
+                        if (layoutItem?.IsViewExists() == true)
+	                        manager.InternalRemoveLogicalChild(layoutItem.View);
+                        manager.RaiseAnchorableClosed(anch); // Raise final event
+                    }
+                }
+                else if (anch.CanHide) // Fallback Action: Hide
+                {
+                     if (!useDefaultLogic) useDefaultLogic = layoutItem.IsDefaultHideCommand;
+
+                    if (!useDefaultLogic)
+                    {
+                        // User Custom Command Path
+                        layoutItem?.HideCommand?.Execute(null);
+                    }
+                    else
+                    {
+                        // Default AvalonDock Logic Path
+                        // Use 'false' to bypass internal cancel checks already done in Phase 1.
+                        if (anch.HideAnchorable(false)) // Does NOT raise manager's Hiding/Hidden events again
+                        {
+                            // View removal for Hide is typically handled by DockingManager logic or CollectGarbage.
+                            manager.RaiseAnchorableHidden(anch); // Raise final event
+                        }
+                    }
+                }
 			    // If neither CanClose nor CanHide, do nothing (already validated in Phase 1).
 		    }
 		    // Window will close naturally as e.Cancel was not set to true.

@@ -1996,6 +1996,12 @@ namespace AvalonDock
 
 		internal void RaiseAnchorableClosing(AnchorableClosingEventArgs e) => AnchorableClosing?.Invoke(this, e);
 
+		internal void RaiseDocumentClosed(LayoutDocument document) => DocumentClosed?.Invoke(this, new DocumentClosedEventArgs(document));
+		
+		internal void RaiseAnchorableClosed(LayoutAnchorable anchorable) => AnchorableClosed?.Invoke(this, new AnchorableClosedEventArgs(anchorable));
+		
+		internal void RaiseAnchorableHidden(LayoutAnchorable anchorable) => AnchorableHidden?.Invoke(this, new AnchorableHiddenEventArgs(anchorable));
+		
 		#endregion Internal Methods
 
 		#region Overrides
