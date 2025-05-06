@@ -211,7 +211,12 @@ namespace AvalonDock.Controls
 			// - Check explicit property first.
 			// - Check internal LayoutContent.Closing event subscribers.
 			// - Check external DockingManager.DocumentClosing event subscribers.
-			var cancelAll = documentsToClose.Any(doc => !doc.CanClose || !doc.TestCanClose() || !ManagerTestCanClose(doc));
+			// - Check command CanExecute.
+			var cancelAll = documentsToClose.Any(
+				doc => !doc.CanClose 
+				       || !doc.TestCanClose() 
+				       || !ManagerTestCanClose(doc)
+				       || !(manager.GetLayoutItemFromModel(doc)?.CloseCommand?.CanExecute(null) ?? false));
 			
 			// If any document prevents closing, cancel the window closing.
 			if (cancelAll)
@@ -223,20 +228,13 @@ namespace AvalonDock.Controls
 			// Phase 2: Execute close actions for ALL documents
 			// Execute actions now because the window WILL close after this method returns.
 			// Use commands to ensure standard AvalonDock logic is triggered.
-			foreach (var doc in documentsToClose.ToList()) // Use ToList() as closing might modify the underlying collection.
+			foreach (var docLayoutItem in documentsToClose
+				         .ToList()
+				         .Select(doc => manager.GetLayoutItemFromModel(doc) as LayoutDocumentItem))
 			{
-				var docLayoutItem = manager.GetLayoutItemFromModel(doc) as LayoutDocumentItem;
-				if (docLayoutItem?.CloseCommand != null && docLayoutItem.CloseCommand.CanExecute(null))
-				{
-					// CloseCommand will internally perform CanClose/event checks again,
-					// but they should pass now.
-					docLayoutItem.CloseCommand.Execute(null);
-				}
-				else
-				{
-					// Fallback if command is somehow not available.
-					doc.CloseInternal();
-				}
+				// CloseCommand will internally perform CanClose/event checks again,
+				// but they should pass now.
+				docLayoutItem?.CloseCommand?.Execute(null);
 			}
 			// Window will close naturally as e.Cancel was not set to true.
 		}
